@@ -1,30 +1,58 @@
-"use strict"
-// require("dotenv").config();
-
+if(process.env.NODE_ENV !== 'production') {
+    require('dotenv').config();
+}
 const express = require("express");
-const jwt = require('jsonwebtoken');
-
 let loginRouter = express.Router();
+const passport = require('passport');
+const session = require('express-session');
+const flash = require('express-flash');
+const initializePassport = require('../passport-config');
+const dbConn = require("../db/dbService");
 
-const posts = [
-    { username: "Vanessa", title: "Title Uno" },
-    { username: "Jef", title: "Title Dos" }
-];
+const getUserByEmail = (email) => { 
+    return new Promise((resolve, reject) => {
+        dbConn.query('SELECT * FROM users where email = ?', email, (err, res) => {
+            if(err) { return reject(err); }
+            console.log('res email ' + res);
+            return resolve(res);
+        });
+    });
+}
+
+const getUserById = (id) => { 
+    return new Promise((resolve, reject) => {
+        dbConn.query('SELECT * FROM users where id = ?', id, (err, res) => {
+            if(err) { return reject(err); }
+            console.log('res id ' + res);
+            return resolve(res);
+        });
+    });
+}
+
+initializePassport(
+    passport, 
+    email => getUserByEmail(email),
+    id => getUserById(id));
+
+loginRouter.use(session({
+    secret : process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false
+}));
+
+loginRouter.use(passport.initialize());
+loginRouter.use(passport.session());
+loginRouter.use(flash());
 
 loginRouter.get('/', (req, res ) => {
     return res.render('login.ejs');
 });
 
-// loginRouter.get('/', authenticateToken, (req, res ) => {
-//     return res.json(posts.filter(post => post.username === req.user.name));
-// });
-
-loginRouter.post('/', (req, res ) => {
-    // const username = req.body.username;
-    // const user = { name: username };
-    // const ACCESS_TOKEN = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET_KEY);
-    // res.json({accessToken: ACCESS_TOKEN});
-});
+loginRouter.post('/', passport.authenticate('local', {
+    successRedirect: 'home',
+    failureRedirect: '/',
+    failureFlash: true
+}));
 
 function authenticateToken(req, res, next ) {
     // const authHeader = req.headers['authorization'];
